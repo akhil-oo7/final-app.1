@@ -66,76 +66,61 @@ class ContentModerator:
                 raise FileNotFoundError("Trained model not found. Please train the model first.")
     
     def analyze_frames(self, frames):
-        """
-        Analyze frames for inappropriate content.
-        
-        Args:
-            frames (list): List of video frames as numpy arrays
-            
-        Returns:
-            list: List of analysis results for each frame
-        """
         results = []
         
-        # Convert frames to dataset
+        # Process frames in smaller batches
+        batch_size = 16  # Reduced from 32
         dataset = VideoFrameDataset(frames, [0] * len(frames), self.feature_extractor)
-        dataloader = DataLoader(dataset, batch_size=32)
+        dataloader = DataLoader(dataset, batch_size=batch_size)
         
         self.model.eval()
         with torch.no_grad():
-            for batch in dataloader:
-                pixel_values = batch['pixel_values'].to(self.device)
-                outputs = self.model(pixel_values)
-                predictions = torch.softmax(outputs.logits, dim=1)
-                
-                for pred in predictions:
-                    # Get probability of violence (class 1)
-                    violence_prob = pred[1].item()
-                    # Lower threshold for violence detection
-                    flagged = violence_prob > 0.3  # Changed from 0.5 to 0.3
+            for batch in tqdm(dataloader, desc="Analyzing frames"):
+                try:
+                    pixel_values = batch['pixel_values'].to(self.device)
+                    outputs = self.model(pixel_values)
+                    predictions = torch.softmax(outputs.logits, dim=1)
                     
-                    results.append({
-                        'flagged': flagged,
-                        'reason': "Detected violence" if flagged else "No inappropriate content detected",
-                        'confidence': violence_prob if flagged else 1 - violence_prob
-                    })
-        
+                    for pred in predictions:
+                        violence_prob = pred[1].item()
+                        flagged = violence_prob > 0.3
+                        
+                        results.append({
+                            'flagged': flagged,
+                            'reason': "Detected violence" if flagged else "No inappropriate content detected",
+                            'confidence': violence_prob if flagged else 1 - violence_prob
+                        })
+                        
+                    # Clear GPU cache if using CUDA
+                    if self.device == "cuda":
+                        torch.cuda.empty_cache()
+                        
+                except Exception as e:
+                    print(f"Error processing batch: {str(e)}")
+                    continue
+                    
         return results
 
-    def analyze_video(video_path):
+    def analyze_video(video_path, max_frames=100):
         print("✅ Starting video analysis...")
         try:
-            # Frame extraction with validation
-            frames = extract_frames(video_path)
-            if not frames or not isinstance(frames, list):
-                print("❌ Frame extraction failed - empty result or invalid type")
+            frames = extract_frames(video_path, max_frames=max_frames)
+            if not frames:
                 return {"status": "error", "message": "Frame extraction failed"}
                 
             print(f"✅ {len(frames)} frames extracted")
-            if len(frames[0].shape) != 3:  # Check frame dimensions
-                print(f"❌ Invalid frame shape: {frames[0].shape}")
-                return {"status": "error", "message": "Invalid frame dimensions"}
-    
-            # Model prediction
+            
             try:
                 predictions = classify_frames(frames)
-                print(f"✅ Predictions sample: {predictions[:2]}")
-            except Exception as e:
-                print(f"❌ Prediction failed: {str(e)}")
-                return {"status": "error", "message": "Model prediction failed"}
-    
-            # Result processing
-            try:
                 summary = summarize_results(predictions)
-                print(f"✅ Analysis completed successfully")
                 return {"status": "success", "results": summary}
-            except Exception as e:
-                print(f"❌ Result processing failed: {str(e)}")
-                return {"status": "error", "message": "Result processing failed"}
+            
+            except torch.cuda.OutOfMemoryError:
+                return {"status": "error", "message": "GPU memory exceeded - try reducing max_frames"}
                 
         except Exception as e:
-            print(f"❌ Unexpected error: {str(e)}")
-            return {"status": "error", "message": "Unexpected analysis error"}
+            print(f"❌ Analysis failed: {str(e)}")
+            return {"status": "error", "message": f"Analysis failed: {str(e)}"}
 
     def load_model():
         try:
