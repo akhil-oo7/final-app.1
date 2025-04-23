@@ -100,4 +100,50 @@ class ContentModerator:
                         'confidence': violence_prob if flagged else 1 - violence_prob
                     })
         
-        return results 
+        return results
+
+    def analyze_video(video_path):
+        print("✅ Starting video analysis...")
+        try:
+            # Frame extraction with validation
+            frames = extract_frames(video_path)
+            if not frames or not isinstance(frames, list):
+                print("❌ Frame extraction failed - empty result or invalid type")
+                return {"status": "error", "message": "Frame extraction failed"}
+                
+            print(f"✅ {len(frames)} frames extracted")
+            if len(frames[0].shape) != 3:  # Check frame dimensions
+                print(f"❌ Invalid frame shape: {frames[0].shape}")
+                return {"status": "error", "message": "Invalid frame dimensions"}
+    
+            # Model prediction
+            try:
+                predictions = classify_frames(frames)
+                print(f"✅ Predictions sample: {predictions[:2]}")
+            except Exception as e:
+                print(f"❌ Prediction failed: {str(e)}")
+                return {"status": "error", "message": "Model prediction failed"}
+    
+            # Result processing
+            try:
+                summary = summarize_results(predictions)
+                print(f"✅ Analysis completed successfully")
+                return {"status": "success", "results": summary}
+            except Exception as e:
+                print(f"❌ Result processing failed: {str(e)}")
+                return {"status": "error", "message": "Result processing failed"}
+                
+        except Exception as e:
+            print(f"❌ Unexpected error: {str(e)}")
+            return {"status": "error", "message": "Unexpected analysis error"}
+
+    def load_model():
+        try:
+            if not hasattr(self, 'model'):
+                print("⚙️ Loading model...")
+                self.model = torch.load(MODEL_PATH, map_location=self.device)
+                self.model.eval()
+                print("✅ Model loaded successfully")
+        except Exception as e:
+            print(f"❌ Model loading failed: {str(e)}")
+            raise

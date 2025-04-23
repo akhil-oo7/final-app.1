@@ -46,7 +46,7 @@ class VideoProcessor:
                     
                     if frame_count % self.frame_interval == 0:
                         try:
-                            frame_rgb = cv2.cvtColor(frame, cv2.CAP_PROP_CONVERT_RGB)
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             frame_resized = cv2.resize(frame_rgb, self.target_size)
                             frames.append(frame_resized)
                             
