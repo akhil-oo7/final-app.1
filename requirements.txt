@@ -1,7 +1,8 @@
 opencv-python-headless==4.8.0.76
 numpy==1.24.3
 transformers==4.36.2  # Updated to address deprecation warnings
-torch==2.1.1
+torch==2.1.1  # Keep this stable version
+transformers==4.36.2  # Updated to latest stable
 python-dotenv==1.0.0
 tqdm==4.66.1
 pillow==10.1.0
