@@ -20,16 +20,33 @@ class VideoFrameDataset(Dataset):
         frame = self.frames[idx]
         label = self.labels[idx]
         
-        # Convert numpy array to PIL Image
-        image = Image.fromarray(frame)
-        
-        # Preprocess the image
-        inputs = self.feature_extractor(image, return_tensors="pt")
-        
-        return {
-            'pixel_values': inputs['pixel_values'].squeeze(),
-            'label': torch.tensor(label, dtype=torch.long)
-        }
+        try:
+            # Validate frame before processing
+            if frame is None or frame.size == 0:
+                raise ValueError("Empty/invalid frame")
+                
+            # Convert numpy array to PIL Image with validation
+            if not isinstance(frame, np.ndarray):
+                raise TypeError("Frame must be numpy array")
+                
+            image = Image.fromarray(frame)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+                
+            # Preprocess with error handling
+            inputs = self.feature_extractor(image, return_tensors="pt")
+            return {
+                'pixel_values': inputs['pixel_values'].squeeze(),
+                'label': torch.tensor(label, dtype=torch.long)
+            }
+            
+        except Exception as e:
+            print(f"Error processing frame {idx}: {str(e)}")
+            # Return empty tensor for bad frames (will be filtered later)
+            return {
+                'pixel_values': torch.zeros(3, 224, 224),
+                'label': torch.tensor(-1, dtype=torch.long)
+            }
 
 class ContentModerator:
     def __init__(self, model_name="microsoft/resnet-50", train_mode=False):
